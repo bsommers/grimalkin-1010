@@ -1,6 +1,23 @@
-# GRIMALKIN 1010
+<p align="center">
+  <img src="assets/brand/banner.svg" alt="GRIMALKIN 1010 — one game, two renderers: Retro vector CRT on the left, Neo 2.5D on the right, with the cat-skull boss straddling the seam" width="100%">
+</p>
 
-An original two-mode arcade space shooter, built around the cyberpunk pixel-cat badge.
+<h1 align="center">
+  <img src="assets/brand/logo.svg" alt="" width="40" height="40" align="top">
+  GRIMALKIN 1010
+</h1>
+
+<p align="center">
+  <b>Mine the rocks. Arm the bombs. Do not let them finish the cat.</b><br>
+  An original two-mode arcade space shooter, built around the cyberpunk pixel-cat badge.
+</p>
+
+<p align="center">
+  <img alt="No dependencies" src="https://img.shields.io/badge/dependencies-none-19e6ff?style=flat-square&labelColor=070b24">
+  <img alt="Plain JavaScript" src="https://img.shields.io/badge/plain-JavaScript-ffd21e?style=flat-square&labelColor=070b24">
+  <img alt="Renderers: Canvas 2D and WebGL2" src="https://img.shields.io/badge/renderers-Canvas%202D%20%2B%20WebGL2-ff8a1e?style=flat-square&labelColor=070b24">
+  <img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-7dff6b?style=flat-square&labelColor=070b24">
+</p>
 
 Mine asteroids for **shards** and forge them into **Nipbombs** while enemy **Scrappers**
 haul shards to a build site and assemble **GRIMALKIN** — a colossal biomechanical
@@ -72,7 +89,28 @@ js/entities/Asteroid.js     rocks, yield + breakup tables, shards
 js/entities/Drones.js       Scrapper and Claw state machines
 js/entities/Grimalkin.js    the boss: 12-plate assembly, hunting, taunts, 13-hit kill
 docs/CONTRACT.md            interface contract between the bridge, renderers, audio and input
+assets/brand/               logo, banner, social card, favicons, web manifest
 ```
+
+## Brand assets
+
+Everything in `assets/brand/` is original vector art, self-contained (no external fonts
+or images), with PNG renders alongside.
+
+| File | Use |
+|---|---|
+| `banner.svg` / `banner.png` | README and site hero (1280×400, PNG at 2×) |
+| `social-card.svg` / `social-card.png` | Social preview / Open Graph card (1280×640) |
+| `logo.svg` / `logo-512.png` | Full emblem |
+| `logo-mark.svg` / `favicon.svg` | Simplified mark for small sizes |
+| `favicon.ico`, `icon-16…512.png` | Browser tab, Apple touch (180), PWA (192, 512) |
+| `site.webmanifest` | Install metadata |
+
+<p align="center">
+  <img src="assets/brand/logo.svg" alt="GRIMALKIN 1010 emblem" width="160">
+  &nbsp;&nbsp;&nbsp;
+  <img src="assets/badge.png" alt="The cyberpunk pixel-cat badge that started it" width="160">
+</p>
 
 ## License
 
