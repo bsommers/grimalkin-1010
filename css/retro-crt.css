@@ -1,0 +1,87 @@
+/*
+ * GRIMALKIN 1010 — retro CRT cabinet dressing.
+ * Everything here is scoped to body.mode-retro.
+ *
+ * The scanlines, aperture mask, vignette, flicker and flash live inside the
+ * canvas (RetroEngine.applyScanlineOverlay). This sheet adds what a canvas
+ * cannot: the bezel around the letterboxed picture, the tube glass and glare.
+ *
+ * RetroEngine.resize() publishes the picture rectangle in CSS px on :root:
+ *   --crt-x, --crt-y, --crt-w, --crt-h, --crt-r
+ * #crtOverlay is assumed to share the canvas's top-left corner and size.
+ */
+
+body.mode-retro #retroCanvas {
+  background: #000000;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
+}
+
+body.mode-retro #crtOverlay {
+  display: block;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  margin: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: none;
+  contain: strict;
+}
+
+/* Tube face: sits exactly on the picture; its outer shadow is the bezel. */
+body.mode-retro #crtOverlay::before {
+  content: "";
+  position: absolute;
+  left: var(--crt-x, 0px);
+  top: var(--crt-y, 0px);
+  width: var(--crt-w, 100%);
+  height: var(--crt-h, 100%);
+  box-sizing: border-box;
+  border-radius: var(--crt-r, 18px);
+  border: 1px solid rgba(25, 230, 255, 0.16);
+  box-shadow:
+    /* glass edge + depth of the tube */
+    inset 0 0 2px 1px rgba(0, 0, 0, 0.9),
+    inset 0 0 28px 6px rgba(0, 0, 0, 0.55),
+    inset 0 0 90px 10px rgba(7, 11, 36, 0.35),
+    /* phosphor light spilling onto the bezel lip */
+    0 0 0 2px #000000,
+    0 0 0 3px rgba(20, 80, 255, 0.35),
+    0 0 26px 4px rgba(25, 230, 255, 0.13),
+    0 0 90px 18px rgba(20, 80, 255, 0.10),
+    /* the bezel itself: fills all letterbox area */
+    0 0 0 200vmax #03040a;
+}
+
+/* Glare on the curved glass. */
+body.mode-retro #crtOverlay::after {
+  content: "";
+  position: absolute;
+  left: var(--crt-x, 0px);
+  top: var(--crt-y, 0px);
+  width: var(--crt-w, 100%);
+  height: var(--crt-h, 100%);
+  border-radius: var(--crt-r, 18px);
+  background:
+    radial-gradient(120% 70% at 26% -18%, rgba(190, 235, 255, 0.085) 0%, rgba(190, 235, 255, 0.03) 38%, rgba(0, 0, 0, 0) 60%),
+    radial-gradient(90% 55% at 82% 118%, rgba(255, 138, 30, 0.035) 0%, rgba(0, 0, 0, 0) 60%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.022) 0%, rgba(255, 255, 255, 0) 22%, rgba(0, 0, 0, 0) 78%, rgba(0, 0, 0, 0.12) 100%);
+  animation: grk-crt-glass 5.5s ease-in-out infinite;
+}
+
+@keyframes grk-crt-glass {
+  0%, 100% { opacity: 0.9; }
+  47% { opacity: 1; }
+  50% { opacity: 0.82; }
+  53% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.mode-retro #crtOverlay::after {
+    animation: none;
+  }
+}

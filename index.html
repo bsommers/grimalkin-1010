@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>GRIMALKIN 1010</title>
+<link rel="icon" href="assets/badge-256.png">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/retro-crt.css">
+</head>
+<body class="mode-neo">
+
+<!-- ============================ render surfaces ============================ -->
+<div id="stage">
+    <canvas id="neoCanvas"></canvas>
+    <canvas id="retroCanvas"></canvas>
+    <div id="crtOverlay"></div>
+</div>
+
+<!-- ================================== HUD ================================== -->
+<div id="hud">
+    <div class="panel tl">
+        <div class="row"><label>SCORE</label><b id="score">0</b></div>
+        <div class="row small"><label>HIGH</label><span id="hiscore">0</span></div>
+        <div class="row small"><label>SHIPS</label><span id="lives">▲▲▲</span><label class="gap">WAVE</label><span id="wave">1</span></div>
+    </div>
+
+    <div class="panel tc">
+        <label id="bossLabel">GRIMALKIN — ASSEMBLY</label>
+        <div id="bossPips" class="pips boss"></div>
+    </div>
+
+    <div class="panel tr">
+        <canvas id="radar" width="168" height="168"></canvas>
+        <label>LONG-RANGE SCAN</label>
+    </div>
+
+    <div class="panel bl">
+        <label>NIPBOMBS</label>
+        <div id="bombPips" class="pips bombs"></div>
+    </div>
+
+    <div class="panel br">
+        <button id="modeBtn" title="Switch renderer (M)"><span class="k">M</span> MODE: <b id="modeLabel">NEO 2.5D</b></button>
+        <button id="muteBtn" title="Mute (N)">SOUND ON</button>
+        <span id="fps">60 FPS</span>
+    </div>
+</div>
+
+<div id="bossArrow"><svg viewBox="0 0 40 40" width="44" height="44"><path d="M4 6 L36 20 L4 34 L12 20 Z"/></svg></div>
+
+<div id="banner"><div id="bannerMain"></div><div id="bannerSub"></div></div>
+<div id="notice"></div>
+
+<!-- ================================ screens ================================ -->
+<div id="titleScreen" class="screen">
+    <img class="badge" src="assets/badge.png" alt="Cyberpunk pixel cat badge" draggable="false">
+    <h1><span>GRIMALKIN</span><em>1010</em></h1>
+    <p class="tag">Mine the rocks. Arm the bombs. Do not let them finish the cat.</p>
+    <button id="startBtn">PRESS ENTER TO FLY</button>
+    <div class="keys">
+        <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrows<span>thrust</span></div>
+        <div><kbd>SPACE</kbd><span>fire + mining beam</span></div>
+        <div><kbd>B</kbd> / <kbd>SHIFT</kbd><span>launch Nipbomb</span></div>
+        <div><kbd>M</kbd><span>Retro ⇄ Neo, any time</span></div>
+        <div><kbd>P</kbd> pause · <kbd>N</kbd> mute<span>gamepad + touch supported</span></div>
+    </div>
+</div>
+
+<div id="gameOverScreen" class="screen">
+    <h2>SIGNAL LOST</h2>
+    <p class="final">FINAL SCORE <b id="finalScore">0</b></p>
+    <p class="tag blink">PRESS ENTER</p>
+</div>
+
+<div id="pauseScreen" class="screen"><h2>PAUSED</h2><p class="tag">P to resume</p></div>
+
+<!-- ============================== bootloader =============================== -->
+<script src="js/assets/BadgeData.js"></script>
+<script src="js/core/Kernel.js"></script>
+<script src="js/core/StateManager.js"></script>
+<script src="js/core/Input.js"></script>
+<script src="js/core/AudioSynth.js"></script>
+<script src="js/entities/Grimalkin.js"></script>
+<script src="js/entities/PlayerShip.js"></script>
+<script src="js/entities/Asteroid.js"></script>
+<script src="js/entities/Drones.js"></script>
+<script src="js/engines/RetroEngine.js"></script>
+<script src="js/engines/NeoEngine.js"></script>
+<script src="js/core/EngineBridge.js"></script>
+<script>
+    window.addEventListener('DOMContentLoaded', function () {
+        window.GAME = new EngineBridge();
+        window.GAME.init();
+    });
+</script>
+</body>
+</html>
