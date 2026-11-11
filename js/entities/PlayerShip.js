@@ -1,6 +1,6 @@
 /* GRIMALKIN 1010 — the pilot's courier ship, its bolts, and its Nipbombs.
  *
- * Drifting Newtonian flight driven by the 49-way thrust vector, a short-range
+ * Drifting Newtonian flight (rotate-and-thrust on keyboard, point-to-fly on a stick), a short-range
  * mining beam resolved by raycast against asteroids, and the Nipbomb inventory
  * (stored on the bridge as `game.playerBombs` so it survives death and mode swaps).
  */
@@ -27,14 +27,33 @@ class PlayerShip extends Entity {
         const mag = Math.min(1, Math.hypot(mx, my));
 
         // --- drifting physics -------------------------------------------------
+        const aim = inp && inp.aim;
+        const aiming = !!aim && (aim.x !== 0 || aim.y !== 0);
+        if (aiming) {
+            // Right stick: the nose (guns, beam, bombs) points where it is pushed.
+            this.angle = GMath.turnToward(this.angle, Math.atan2(aim.y, aim.x), PlayerShip.TURN_RATE * dt);
+        }
         if (mag > 0.01) {
-            const want = Math.atan2(my, mx);
-            this.angle = GMath.turnToward(this.angle, want, PlayerShip.TURN_RATE * dt);
-            // Thrust goes where the stick points; the hull swings round to follow.
+            // Stick / touch: thrust goes where the stick points; the hull swings round to follow.
+            if (!aiming) this.angle = GMath.turnToward(this.angle, Math.atan2(my, mx), PlayerShip.TURN_RATE * dt);
             this.vx += mx * PlayerShip.ACCEL * dt;
             this.vy += my * PlayerShip.ACCEL * dt;
         }
-        this.thrust += (mag - this.thrust) * Math.min(1, dt * 12);
+
+        // Keyboard: left / right rotate, up thrusts along the nose, down brakes then backs up slowly.
+        const turn = (inp && inp.turn) || 0, throttle = (inp && inp.throttle) || 0;
+        if (turn) this.angle += turn * PlayerShip.ROTATE_RATE * dt;
+        if (throttle > 0) {
+            this.vx += Math.cos(this.angle) * PlayerShip.ACCEL * throttle * dt;
+            this.vy += Math.sin(this.angle) * PlayerShip.ACCEL * throttle * dt;
+        } else if (throttle < 0) {
+            const brake = Math.exp(PlayerShip.BRAKE * throttle * dt);
+            this.vx *= brake; this.vy *= brake;
+            this.vx += Math.cos(this.angle) * PlayerShip.REVERSE_ACCEL * throttle * dt;
+            this.vy += Math.sin(this.angle) * PlayerShip.REVERSE_ACCEL * throttle * dt;
+        }
+        const burn = Math.max(mag, throttle > 0 ? throttle : 0);
+        this.thrust += (burn - this.thrust) * Math.min(1, dt * 12);
         const drag = Math.exp(-PlayerShip.DRAG * dt);
         this.vx *= drag; this.vy *= drag;
         const sp = Math.hypot(this.vx, this.vy);
@@ -121,7 +140,10 @@ class PlayerShip extends Entity {
 PlayerShip.ACCEL = 760;
 PlayerShip.DRAG = 0.85;
 PlayerShip.MAX_SPEED = 520;
-PlayerShip.TURN_RATE = 11;
+PlayerShip.TURN_RATE = 11;         // stick: how fast the hull swings to the stick direction
+PlayerShip.ROTATE_RATE = 4.2;      // keyboard: radians per second
+PlayerShip.BRAKE = 2.6;            // keyboard down: extra drag while braking
+PlayerShip.REVERSE_ACCEL = 200;    // keyboard down: slow reverse thrusters
 PlayerShip.FIRE_INTERVAL = 0.115;
 PlayerShip.BEAM_RANGE = 250;
 PlayerShip.BEAM_POWER = 0.9;       // mining progress per second (1.0 = one shard)

@@ -221,6 +221,42 @@ class NeoMesh {
     return m;
   }
 
+  /* space mouse: nose along +X, ~15 long (tail is a separate mesh so it can swing) */
+  static mouse() {
+    const m = new NeoMesh(), fur = [0.86, 0.45, 0.62], pink = [1.0, 0.37, 0.64];
+    const R = (x, ry, rz, y0) => NeoMesh.ringX(x, ry, rz, 8, y0);
+    m.mat(fur, 0.55, 0.36, 0.14);
+    m.loft([R(9, 0, 0, -0.6), R(6.2, 1.3, 1.4, -0.3), R(2.5, 3.0, 3.5, 0), R(-1.5, 3.7, 4.4, 0.1), R(-4.8, 2.9, 3.6, 0), R(-6.5, 0, 0, -0.2)], [-1, 0, 0]);
+    for (const sg of [-1, 1]) {
+      const ex = 2.6, ey = 4.9, ez = sg * 3.3, er = 2.7, n = 8;
+      const ring = [], fr = [], bk = [];
+      for (let i = 0; i < n; i++) {
+        const t = i / n * 6.283185307;
+        ring.push([ex, ey + er * Math.cos(t), ez + er * Math.sin(t)]);
+        fr.push([ex + 0.55, ey, ez]); bk.push([ex - 0.55, ey, ez]);
+      }
+      m.mat(pink, 0, 0.3, 1); m.loft([fr, ring], [ex, ey, ez]);
+      m.mat(fur, 0.55, 0.36, 0.14); m.loft([ring, bk], [ex, ey, ez]);
+    }
+    m.mat(pink, 0, 0.25, 1); m.box(9, -0.6, 0, 0.55, 0.5, 0.55);
+    m.mat([0.02, 0.02, 0.04], 0.2, 0.08, 0);
+    m.box(6.3, 1.25, 1.35, 0.45, 0.45, 0.45); m.box(6.3, 1.25, -1.35, 0.45, 0.45, 0.45);
+    return m;
+  }
+
+  /* mouse tail: tapered S-curved strip from its root at the origin back along -X */
+  static mouseTail() {
+    const m = new NeoMesh();
+    const P = [[0.5, 0, 0.75], [-2.5, 0.7, 0.6], [-5, -0.8, 0.45], [-7.5, 0.6, 0.3], [-9.5, -0.2, 0.08]];
+    const sec = p => [[p[0], 0.45 * p[2], p[1]], [p[0], 0, p[1] + p[2]], [p[0], -0.45 * p[2], p[1]], [p[0], 0, p[1] - p[2]]];
+    m.mat([1.0, 0.37, 0.64], 0.1, 0.4, 0.6);
+    for (let i = 0; i + 1 < P.length; i++) {
+      const a = P[i], b = P[i + 1];
+      m.loft([sec(a), sec(b)], [(a[0] + b[0]) / 2, 0, (a[1] + b[1]) / 2]);
+    }
+    return m;
+  }
+
   static bomb() {
     const m = new NeoMesh(), r = 7;
     const v = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
@@ -975,7 +1011,8 @@ class NeoEngine {
       player: this._mesh(NeoMesh.player()), worker: this._mesh(NeoMesh.worker()),
       warrior: this._mesh(NeoMesh.warrior()), crystal: this._mesh(NeoMesh.crystal()),
       bomb: this._mesh(NeoMesh.bomb()), eye: this._mesh(NeoMesh.bossEye()),
-      pupil: this._mesh(NeoMesh.bossPupil()), throat: this._mesh(NeoMesh.bossThroat())
+      pupil: this._mesh(NeoMesh.bossPupil()), throat: this._mesh(NeoMesh.bossThroat()),
+      mouse: this._mesh(NeoMesh.mouse()), mouseTail: this._mesh(NeoMesh.mouseTail())
     };
 
     /* 1x1 placeholder badge texture */
@@ -1321,6 +1358,7 @@ class NeoEngine {
           case 'crystal': this._eCrystal(e); break;
           case 'worker': this._eWorker(e); break;
           case 'warrior': this._eWarrior(e); break;
+          case 'mouse': this._eMouse(e); break;
           case 'shot': this._eShot(e); break;
           case 'bomb': this._eBomb(e); break;
           case 'beam': this._eBeam(e); break;
@@ -1473,6 +1511,29 @@ class NeoEngine {
       const fl = 0.5 + 0.5 * Math.sin(t * 50 + e.rx);
       this._light(e.rx + ca * 16 * s, 16, e.ry + sa * 16 * s, 70, 0.4 * fl, 1.2 * fl, 3.5 * fl);
     }
+  }
+
+  _eMouse(e) {
+    const t = this._time, fin = v => (Number.isFinite(+v) ? +v : 0);
+    const a = fin(e.angle), s = (fin(e.radius) > 0 ? fin(e.radius) : 11) / 11;
+    const vx = fin(e.vx), vy = fin(e.vy), panic = e.panic ? 1 : 0;
+    const sr = +e.scurry, sc = Number.isFinite(sr) && sr !== 0 ? sr : (Number.isFinite(+e.age) ? +e.age : t) * 12;
+    const sq = Math.min(1, Math.max(0, +e.squeak || 0));
+    const wig = Math.sin(sc), ab = a + wig * 0.1, ca = Math.cos(ab), sa = Math.sin(ab);
+    const y = 10 + Math.abs(wig) * 0.8 * s;
+    const k = 1.7 + panic * 2.3 + sq * 5, fl = sq * sq * 0.14;
+    this._model(e.rx, y, e.ry, ab, wig * 0.1, s, 0, 0, 0);
+    this._draw(this.M.mouse, 2, 1, 1, 1, k, k, k, 0, 0, fl, 0, vx, vy, 6.1);
+    /* tail swings from the rump in counter-phase, faster body = wider swing */
+    const rx = e.rx - ca * 6 * s, rz = e.ry - sa * 6 * s;
+    this._model(rx, y - 0.2 * s, rz, ab - wig * (0.45 + panic * 0.25), 0, s, 0, 0, 0);
+    this._draw(this.M.mouseTail, 2, 1, 1, 1, k, k, k, 0, 0, fl, 0, vx, vy, 6.7);
+    const g = 0.28 + panic * 0.3 * (0.75 + 0.25 * Math.sin(t * 22)) + sq * 0.9;
+    this._sprite(e.rx, y + 2, e.ry, (15 + sq * 8) * s, (15 + sq * 8) * s, 0, 1.0, 0.37, 0.64, g, 0, 0);
+    /* bubble helmet: thin ring around the head */
+    this._sprite(e.rx + ca * 5 * s, y + 4 * s, e.ry + sa * 5 * s, 6.2 * s, 6.2 * s, 0, 0.75, 0.9, 1.0, 0.22 + sq * 0.5, 1, 0);
+    const li = 0.9 + panic * 1.1 + sq * 3;
+    this._light(e.rx, y + 9, e.ry, 80 + sq * 50, 2.2 * li, 0.7 * li, 1.3 * li);
   }
 
   _eWarrior(e) {

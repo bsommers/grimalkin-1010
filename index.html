@@ -31,7 +31,7 @@
     <div class="panel tl">
         <div class="row"><label>SCORE</label><b id="score">0</b></div>
         <div class="row small"><label>HIGH</label><span id="hiscore">0</span></div>
-        <div class="row small"><label>SHIPS</label><span id="lives">▲▲▲</span><label class="gap">WAVE</label><span id="wave">1</span></div>
+        <div class="row small"><label>SHIPS</label><span id="lives">▲▲▲</span><label class="gap">WAVE</label><span id="wave">1</span><label class="gap">LEVEL</label><span id="diff">MEDIUM</span></div>
     </div>
 
     <div class="panel tc">
@@ -66,13 +66,22 @@
     <img class="badge" src="assets/badge.png" alt="Cyberpunk pixel cat badge" draggable="false">
     <h1><span>GRIMALKIN</span><em>1010</em></h1>
     <p class="tag">Mine the rocks. Arm the bombs. Do not let them finish the cat.</p>
+    <div class="diffs" role="group" aria-label="Difficulty">
+        <button data-diff="easy"><span class="k">1</span>EASY</button>
+        <button data-diff="medium"><span class="k">2</span>MEDIUM</button>
+        <button data-diff="hard"><span class="k">3</span>HARD</button>
+        <button data-diff="ridiculous"><span class="k">4</span>RIDICULOUS</button>
+    </div>
+    <p id="diffBlurb" class="tag small"></p>
     <button id="startBtn">PRESS ENTER TO FLY</button>
     <div class="keys">
-        <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrows<span>thrust</span></div>
+        <div><kbd>←</kbd><kbd>→</kbd> / <kbd>A</kbd><kbd>D</kbd><span>rotate</span></div>
+        <div><kbd>↑</kbd> / <kbd>W</kbd> thrust · <kbd>↓</kbd> / <kbd>S</kbd> brake<span>then slow reverse</span></div>
         <div><kbd>SPACE</kbd><span>fire + mining beam</span></div>
         <div><kbd>B</kbd> / <kbd>SHIFT</kbd><span>launch Nipbomb</span></div>
-        <div><kbd>M</kbd><span>Retro ⇄ Neo, any time</span></div>
-        <div><kbd>P</kbd> pause · <kbd>N</kbd> mute<span>gamepad + touch supported</span></div>
+        <div><kbd>M</kbd> Retro ⇄ Neo · <kbd>P</kbd> pause · <kbd>N</kbd> mute<span>any time</span></div>
+        <div><kbd>1</kbd>–<kbd>4</kbd> or <kbd>←</kbd><kbd>→</kbd> here<span>difficulty</span></div>
+        <div>CONTROLLER<span>left stick fly · right stick aim + fire · B bomb</span></div>
     </div>
 </div>
 

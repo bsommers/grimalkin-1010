@@ -132,7 +132,7 @@ class WorkerDrone extends Entity {
         const d = this.steerTo(boss.x, boss.y, WorkerDrone.SPEED * 0.85, 420, dt);
         if (d < boss.radius * 0.55) {
             this.carrying = false;
-            boss.addPiece();
+            boss.deliverShard();
             this.setState('SEEK');
         }
     }
@@ -246,4 +246,74 @@ WarriorDrone.AGGRO_RANGE = 800;
 WarriorDrone.LEASH_RANGE = 1500;
 WarriorDrone.CHARGE_TIME = 0.55;
 
-if (typeof module !== 'undefined') module.exports = { WorkerDrone, WarriorDrone };
+/**
+ * Space mouse: a harmless stowaway that darts about between the rocks. Fly over
+ * one to rescue it (score + a Nipbomb). It bolts from Claws and from Grimalkin —
+ * who, being a cat, will drop everything to chase it.
+ */
+class SpaceMouse extends Entity {
+    constructor(game, x, y) {
+        super(game, 'mouse', x, y);
+        this.radius = 11;
+        this.angle = game.rand() * GMath.TAU;
+        this.heading = this.angle;
+        this.scurry = 0;              // animation phase, advances with distance run
+        this.squeak = 0;              // 1 -> 0 flash when it squeaks
+        this.panic = false;
+        this.darting = true;
+        this.moveTimer = 0.5;
+        this.life = SpaceMouse.LIFETIME;
+    }
+
+    update(dt, worldSize) {
+        const game = this.game;
+        // Nearest thing with teeth.
+        let threat = null, td = Infinity;
+        const boss = game.boss;
+        if (boss && boss.alive && boss.built > 0) {
+            const d = GMath.dist(this, boss, worldSize) - boss.radius;
+            if (d < SpaceMouse.FEAR_BOSS) { threat = boss; td = d; }
+        }
+        const claws = game.byType.warrior;
+        for (let i = 0; i < claws.length; i++) {
+            const c = claws[i];
+            if (!c.alive) continue;
+            const d = GMath.dist(this, c, worldSize);
+            if (d < SpaceMouse.FEAR_CLAW && d < td) { threat = c; td = d; }
+        }
+
+        if (threat) {
+            if (!this.panic) { this.panic = true; this.squeak = 1; game.sfxAt('mouseSqueak', this.x, this.y); }
+            const dx = GMath.wrapDelta(this.x - threat.x, worldSize.x);
+            const dy = GMath.wrapDelta(this.y - threat.y, worldSize.y);
+            // Run directly away, with a little zig-zag so it is not a straight line.
+            const a = Math.atan2(dy, dx) + Math.sin(this.age * 5) * 0.5;
+            this.steerTo(this.x + Math.cos(a) * 200, this.y + Math.sin(a) * 200, SpaceMouse.PANIC_SPEED, 1100, dt);
+        } else {
+            this.panic = false;
+            this.moveTimer -= dt;
+            if (this.moveTimer <= 0) {
+                this.darting = !this.darting;
+                this.moveTimer = this.darting ? 0.5 + game.rand() * 0.9 : 0.4 + game.rand() * 1.2;
+                if (this.darting) this.heading += (game.rand() - 0.5) * 2.6;
+            }
+            const sp = this.darting ? SpaceMouse.SPEED : 0;
+            this.steerTo(this.x + Math.cos(this.heading) * 200, this.y + Math.sin(this.heading) * 200, sp, 700, dt);
+        }
+
+        const v = Math.hypot(this.vx, this.vy);
+        if (v > 12) this.angle = GMath.turnToward(this.angle, Math.atan2(this.vy, this.vx), 14 * dt);
+        this.scurry += dt * (2 + v * 0.11);
+        this.squeak = Math.max(0, this.squeak - dt * 2.2);
+        super.update(dt);
+        this.life -= dt;
+        if (this.life <= 0) this.alive = false;
+    }
+}
+SpaceMouse.SPEED = 150;
+SpaceMouse.PANIC_SPEED = 330;
+SpaceMouse.FEAR_BOSS = 520;
+SpaceMouse.FEAR_CLAW = 300;
+SpaceMouse.LIFETIME = 50;
+
+if (typeof module !== 'undefined') module.exports = { SpaceMouse, WorkerDrone, WarriorDrone };

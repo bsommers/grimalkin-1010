@@ -24,7 +24,7 @@ class EngineBridge {
         this.camera = { x: 2500, y: 2500, zoom: 1.0, ux: 2500, uy: 2500, shakeX: 0, shakeY: 0 };
         this.entities = [];
         this.pending = [];
-        this.byType = { player: [], asteroid: [], crystal: [], worker: [], warrior: [], shot: [], bomb: [], beam: [], particle: [], boss: [] };
+        this.byType = { player: [], asteroid: [], crystal: [], worker: [], warrior: [], shot: [], bomb: [], beam: [], particle: [], boss: [], mouse: [] };
         this.renderList = [];
 
         this.bossPartsCollected = 0;                     // out of 12 required
@@ -34,6 +34,9 @@ class EngineBridge {
         this.lives = 3;
         this.wave = 1;
         this.bossKills = 0;
+        this.miceRescued = 0;
+        this.difficulty = EngineBridge.DIFFICULTIES[opts.difficulty] ? opts.difficulty : 'medium';
+        this.prevNav = 0;
 
         this.player = null;
         this.boss = null;
@@ -85,6 +88,12 @@ class EngineBridge {
             const saved = localStorage.getItem('grimalkin.mode');
             if (saved === 'MODE_RETRO' || saved === 'MODE_NEO') this.currentMode = saved;
         } catch (e) { }
+        try {
+            const d = localStorage.getItem('grimalkin.difficulty');
+            if (EngineBridge.DIFFICULTIES[d]) this.difficulty = d;
+        } catch (e) { }
+        const dq = /[?&]difficulty=(\w+)/.exec(location.search);
+        if (dq && EngineBridge.DIFFICULTIES[dq[1]]) this.difficulty = dq[1];
 
         if (typeof BADGE_DATA_URI !== 'undefined') {
             const img = new Image();
@@ -112,6 +121,9 @@ class EngineBridge {
             this.player.invuln = /[?&]god/.test(q) ? 1e9 : 3;
         }
         if (/[?&]bombs/.test(q)) this.playerBombs = PlayerShip.MAX_BOMBS;
+        if (/[?&]mice/.test(q) && this.player) {
+            for (let i = 0; i < 3; i++) this.spawn(new SpaceMouse(this, this.player.x + 110 + i * 70, this.player.y - 90 + i * 80));
+        }
         const b = /[?&](awake|built)(?:=(\d+))?/.exec(q);
         if (b && this.boss && this.player) {
             this.boss.x = GMath.wrap(this.player.x + 230, this.worldSize.x);
@@ -186,6 +198,7 @@ class EngineBridge {
         window.addEventListener('pointerdown', unlock);
         window.addEventListener('resize', () => this.resize());
         document.addEventListener('visibilitychange', () => { if (document.hidden && this.state.inPlay) this.setPaused(true); });
+        window.addEventListener('gamepadconnected', () => this.notice('CONTROLLER CONNECTED — left stick fly · right stick aim · A fire · B bomb · START'));
 
         // The mode toggle is a plain DOM event listener.
         this.dom.modeBtn.addEventListener('click', (e) => { e.preventDefault(); this.toggleMode(); this.dom.modeBtn.blur(); });
@@ -237,8 +250,68 @@ class EngineBridge {
         this.flushPending();
     }
 
-    workerTarget() { return Math.min(9, 4 + this.wave); }
-    warriorTarget() { return Math.min(7, 1 + this.wave); }
+    workerTarget() { return Math.max(2, Math.min(9, 4 + this.wave) + this.tuning.drones); }
+    warriorTarget() { return Math.max(1, Math.min(7, 1 + this.wave) + this.tuning.drones); }
+
+    /* ---------------------------------------------------------- difficulty */
+
+    get tuning() { return EngineBridge.DIFFICULTIES[this.difficulty]; }
+
+    /** Pick a difficulty by name. Applies to the next boss wake-up and all new spawns. */
+    setDifficulty(name) {
+        if (!EngineBridge.DIFFICULTIES[name]) return false;
+        this.difficulty = name;
+        if (this.boss && !this.boss.awake) this.boss.hp = this.boss.hitsToKill;
+        if (!this.headless) {
+            try { localStorage.setItem('grimalkin.difficulty', name); } catch (e) { }
+            this.refreshDifficultyUi();
+            this.audio.sfx('uiSelect');
+        }
+        return true;
+    }
+
+    cycleDifficulty(dir) {
+        const order = EngineBridge.DIFFICULTY_ORDER;
+        const i = order.indexOf(this.difficulty);
+        return this.setDifficulty(order[(i + dir + order.length) % order.length]);
+    }
+
+    refreshDifficultyUi() {
+        if (this.headless || !this.dom) return;
+        const T = this.tuning;
+        if (this.dom.diff) this.dom.diff.textContent = T.label;
+        if (this.dom.diffBlurb) this.dom.diffBlurb.textContent = T.blurb;
+        if (this.dom.diffBtns) for (const b of this.dom.diffBtns) b.classList.toggle('on', b.dataset.diff === this.difficulty);
+    }
+
+    /* ----------------------------------------------------------- space mice */
+
+    /** Drop a space mouse just off-screen from `near` so it wanders into view. */
+    spawnMouse(near) {
+        const a = this.rand() * GMath.TAU, r = 520 + this.rand() * 420;
+        const x = GMath.wrap(near.x + Math.cos(a) * r, this.worldSize.x);
+        const y = GMath.wrap(near.y + Math.sin(a) * r, this.worldSize.y);
+        return this.spawn(new SpaceMouse(this, x, y));
+    }
+
+    rescueMouse(m) {
+        if (!m.alive) return;
+        m.kill();
+        this.miceRescued++;
+        this.addScore(500);
+        if (this.playerBombs < PlayerShip.MAX_BOMBS) this.playerBombs++;
+        this.sfxAt('mouseSqueak', m.x, m.y);
+        this.audio.sfx('crystalPickup', { pitch: 1.8 });
+        this.sparks(m.x, m.y, 12, [1, 0.37, 0.64], 170, 0.5);
+        this.notice('SPACE MOUSE RESCUED  +500  +1 NIPBOMB');
+    }
+
+    onMouseEaten(m, boss) {
+        if (!m.alive) return;
+        m.kill();
+        this.sparks(m.x, m.y, 10, [1, 0.37, 0.64], 220, 0.5);
+        this.sfxAt('mouseSqueak', m.x, m.y);
+    }
 
     spawnAsteroid(avoid, minDist) {
         const p = this.randomPointAwayFrom(avoid, minDist);
@@ -270,6 +343,7 @@ class EngineBridge {
         this.lives = 3;
         this.wave = 1;
         this.bossKills = 0;
+        this.miceRescued = 0;
         this.playerBombs = 0;
         this.respawnTimer = 0;
         this.bossRespawnTimer = 0;
@@ -512,7 +586,15 @@ class EngineBridge {
         if (inp.pressed('toggleMode')) this.toggleMode();
         if (inp.pressed('mute')) this.toggleMute();
         if (inp.pressed('pause') && this.state.inPlay) this.setPaused(!this.paused);
-        if (inp.pressed('start')) {
+        // Title / game-over screens: left-right (keys, stick or d-pad) picks the difficulty.
+        const navNow = (inp.turn || 0) + (inp.move ? inp.move.x : 0);
+        const nav = navNow > 0.5 ? 1 : navNow < -0.5 ? -1 : 0;
+        if (nav && nav !== this.prevNav && !this.state.inPlay) this.cycleDifficulty(nav);
+        this.prevNav = nav;
+        // Controller Start: pauses in play, otherwise acts like Enter.
+        const menu = inp.pressed('menu');
+        if (menu && this.state.inPlay && !this.paused) this.setPaused(true);
+        else if (inp.pressed('start') || menu) {
             this.audio.resume();
             if (this.state.is(StateManager.ATTRACT)) this.startGame();
             else if (this.state.is(StateManager.GAMEOVER) && this.state.timeInState > 1) this.startGame();
@@ -658,6 +740,8 @@ class EngineBridge {
                     if (vn < -160) { this.sparks(p.x - nx * p.radius, p.y - ny * p.radius, 6, [1, 0.8, 0.5], 200, 0.3); this.trauma = Math.min(1, this.trauma + 0.25); }
                 }
             }
+            const mice = by.mouse;
+            for (let j = 0; j < mice.length; j++) if (mice[j].alive && this.hit(p, mice[j], 8)) this.rescueMouse(mice[j]);
             for (let j = 0; j < warriors.length; j++) {
                 const c = warriors[j];
                 if (c.alive && this.hit(p, c, -6)) { this.killDrone(c, true); this.killPlayer('ram'); break; }
@@ -708,6 +792,8 @@ class EngineBridge {
             const avoid = this.player && this.player.alive ? this.player : this.camera;
             if (this.byType.worker.length < this.workerTarget()) this.spawnDrone('worker', avoid, 1300);
             if (this.byType.warrior.length < this.warriorTarget()) this.spawnDrone('warrior', avoid, 1400);
+            // Now and then (a small chance per spawn tick) a space mouse turns up nearby.
+            if (this.byType.mouse.length < EngineBridge.MOUSE_MAX && this.rand() < EngineBridge.MOUSE_CHANCE) this.spawnMouse(avoid);
             let rocks = this.byType.asteroid.length;
             while (rocks < EngineBridge.ASTEROID_TARGET - 6) { this.spawnAsteroid(avoid, 1300); rocks += 4; }
         }
@@ -791,12 +877,19 @@ class EngineBridge {
             banner: $('banner'), bannerMain: $('bannerMain'), bannerSub: $('bannerSub'),
             radar: $('radar'), title: $('titleScreen'), over: $('gameOverScreen'), pause: $('pauseScreen'),
             modeBtn: $('modeBtn'), muteBtn: $('muteBtn'), startBtn: $('startBtn'), modeLabel: $('modeLabel'),
-            arrow: $('bossArrow'), fps: $('fps'), finalScore: $('finalScore'), notice: $('notice'), hud: $('hud')
+            arrow: $('bossArrow'), fps: $('fps'), diff: $('diff'), diffBlurb: $('diffBlurb'),
+            diffBtns: Array.from(document.querySelectorAll('[data-diff]')), finalScore: $('finalScore'), notice: $('notice'), hud: $('hud')
         };
         this.radarCtx = this.dom.radar.getContext('2d');
         const pips = (el, n) => { for (let i = 0; i < n; i++) el.appendChild(document.createElement('i')); };
         pips(this.dom.bombs, PlayerShip.MAX_BOMBS);
         pips(this.dom.boss, 13);
+        for (const b of this.dom.diffBtns) b.addEventListener('click', (e) => { e.preventDefault(); this.setDifficulty(b.dataset.diff); b.blur(); });
+        window.addEventListener('keydown', (e) => {
+            const i = '1234'.indexOf(e.key);
+            if (i >= 0 && e.key.length === 1 && !this.state.inPlay) this.setDifficulty(EngineBridge.DIFFICULTY_ORDER[i]);
+        });
+        this.refreshDifficultyUi();
     }
 
     showScreen(name) {
@@ -887,6 +980,7 @@ class EngineBridge {
                 case 'crystal': col = '#ffd21e'; sz = 1.5; break;
                 case 'worker': col = e.carrying ? '#ffd21e' : '#3d7bff'; sz = 2; break;
                 case 'warrior': col = '#ff3355'; sz = 2.5; break;
+                case 'mouse': col = '#ff5fa2'; sz = 2.5; break;
                 default: continue;
             }
             const x = c + GMath.wrapDelta(e.x - cam.x, w.x) * k, y = c + GMath.wrapDelta(e.y - cam.y, w.y) * k;
@@ -915,10 +1009,23 @@ class EngineBridge {
 }
 
 EngineBridge.ASTEROID_TARGET = 36;
+EngineBridge.MOUSE_CHANCE = 0.15;      // chance per director spawn tick that a space mouse appears (< 20%)
+EngineBridge.MOUSE_MAX = 3;
+
+/* hits = Nipbomb hits to destroy the awake boss · speed / lungeSpeed = multipliers on its
+ * cruise and lunge · lungeEvery = multiplier on the gap between lunges · wakeGrace = groggy
+ * seconds after it wakes · shardsPerPlate = Scrapper deliveries per plate · drones = +/- drones. */
+EngineBridge.DIFFICULTIES = {
+    easy:       { label: 'EASY',       hits: 7,  speed: 0.70, lungeSpeed: 0.78, lungeEvery: 1.9,  wakeGrace: 6,   shardsPerPlate: 4, drones: -1, blurb: 'sleepy cat · 7 bombs to kill' },
+    medium:     { label: 'MEDIUM',     hits: 10, speed: 0.84, lungeSpeed: 0.88, lungeEvery: 1.45, wakeGrace: 4.5, shardsPerPlate: 3, drones: 0,  blurb: 'house cat · 10 bombs to kill' },
+    hard:       { label: 'HARD',       hits: 13, speed: 1.0,  lungeSpeed: 1.0,  lungeEvery: 1.1,  wakeGrace: 3,   shardsPerPlate: 3, drones: 0,  blurb: 'alley cat · 13 bombs to kill' },
+    ridiculous: { label: 'RIDICULOUS', hits: 13, speed: 1.22, lungeSpeed: 1.2,  lungeEvery: 0.55, wakeGrace: 1,   shardsPerPlate: 2, drones: 2,  blurb: 'nine lives, all angry · 13 bombs' }
+};
+EngineBridge.DIFFICULTY_ORDER = ['easy', 'medium', 'hard', 'ridiculous'];
 EngineBridge.MAX_PARTICLES = 420;
 EngineBridge.VIEW_RADIUS = 1500;
 EngineBridge.SHOT_MINE_POWER = 0.12;
-EngineBridge.LAYERS = { asteroid: 0, crystal: 1, boss: 2, worker: 3, warrior: 4, player: 5, beam: 6, shot: 7, bomb: 8, particle: 9 };
+EngineBridge.LAYERS = { asteroid: 0, crystal: 1, mouse: 1, boss: 2, worker: 3, warrior: 4, player: 5, beam: 6, shot: 7, bomb: 8, particle: 9 };
 EngineBridge.layerSort = function (a, b) { return (EngineBridge.LAYERS[a.type] || 0) - (EngineBridge.LAYERS[b.type] || 0); };
 
 if (typeof module !== 'undefined') module.exports = { EngineBridge, NullAudio };

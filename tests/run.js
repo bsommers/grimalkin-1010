@@ -7,7 +7,7 @@ const files = ['js/core/Kernel.js', 'js/core/StateManager.js', 'js/entities/Grim
     'js/entities/Asteroid.js', 'js/entities/Drones.js', 'js/core/EngineBridge.js'];
 const optional = ['js/core/AudioSynth.js', 'js/core/Input.js'];
 const names = ['GMath', 'Entity', 'Particle', 'Beam', 'StateManager', 'Grimalkin', 'PlayerShip', 'Shot', 'Bomb', 'Asteroid',
-    'Crystal', 'WorkerDrone', 'WarriorDrone', 'EngineBridge', 'NullAudio'];
+    'Crystal', 'WorkerDrone', 'WarriorDrone', 'SpaceMouse', 'EngineBridge', 'NullAudio'];
 const optNames = ['AudioSynthMatrix', 'InputManager'];
 const present = optional.filter(f => fs.existsSync(path.join(root, f)));
 let src = files.concat(present).map(f => fs.readFileSync(path.join(root, f), 'utf8')).join('\n;\n');
@@ -27,7 +27,7 @@ function eq(a, b, msg) { if (a !== b) throw new Error((msg || 'expected equal') 
 
 function stubEngine(mode) { return { mode, frames: 0, resize() { }, processSystemLogic() { this.frames++; }, onEvent() { } }; }
 function newGame(seed) {
-    const g = new G.EngineBridge({ headless: true, seed: seed || 1234, engineFactory: stubEngine });
+    const g = new G.EngineBridge({ headless: true, seed: seed || 1234, engineFactory: stubEngine, difficulty: 'hard' });
     g.applyMode(g.currentMode);
     g.populateWorld(null);
     g.state.set('STATE_ATTRACT');
@@ -81,7 +81,7 @@ test('asleep boss does not pursue; awake boss closes on the pilot', () => {
     const d1 = G.GMath.dist(g.boss, g.player, g.worldSize);
     assert(Math.abs(d1 - d0) < 80, 'boss moved while asleep: ' + d0 + ' -> ' + d1);
     for (let i = 0; i < 12; i++) g.boss.addPiece();
-    step(g, 3);
+    step(g, 3 + g.tuning.wakeGrace);                 // it is groggy for wakeGrace seconds first
     const d2 = G.GMath.dist(g.boss, g.player, g.worldSize);
     assert(d2 < d1 - 600, 'boss did not close in: ' + d1 + ' -> ' + d2);
 });
@@ -165,7 +165,7 @@ test('mining a rock yields shards; collecting one makes a Nipbomb', () => {
 });
 test('Scrappers build the boss unaided and it wakes (attract diorama)', () => {
     const g = newGame(99);
-    let t = 0; while (!g.boss.awake && t < 400) { step(g, 1); t++; }
+    let t = 0; while (!g.boss.awake && t < 1500) { step(g, 1); t++; }
     assert(g.boss.awake, 'boss never completed; built=' + g.boss.built);
     eq(g.gameState, 'STATE_ATTRACT', 'attract must not enter AWAKE');
     assert(!g.boss.hunting);
@@ -197,6 +197,90 @@ if (G.AudioSynthMatrix) test('AudioSynthMatrix is headless-safe and enforces the
 if (G.InputManager) test('InputManager is headless-safe and quantises to 49 ways', () => {
     const i = new G.InputManager(null); i.update(0.016); i.endFrame();
     assert(i.move.x === 0 && i.move.y === 0 && i.fire === false && i.pressed('bomb') === false);
+});
+
+if (G.InputManager) test('keyboard is rotate / thrust / brake, not screen-direction', () => {
+    const i = new G.InputManager(null);
+    i.handleKey('ArrowRight', true); for (let k = 0; k < 30; k++) i.update(1 / 60);
+    eq(i.turn, 1); eq(i.throttle, 0); eq(i.move.x, 0); eq(i.move.y, 0);
+    i.handleKey('ArrowRight', false); i.handleKey('ArrowUp', true); for (let k = 0; k < 30; k++) i.update(1 / 60);
+    eq(i.turn, 0); eq(i.throttle, 1);
+    i.handleKey('ArrowUp', false); i.handleKey('ArrowDown', true); for (let k = 0; k < 30; k++) i.update(1 / 60);
+    eq(i.throttle, -1);
+});
+test('ship: right rotates clockwise, up thrusts along the nose, down brakes', () => {
+    const g = newGame(); g.startGame(); removeThreats(g); g.flushPending();
+    const p = g.player; p.vx = p.vy = 0; p.angle = 0;
+    p.control = { move: { x: 0, y: 0 }, turn: 1, throttle: 0, fire: false, pressed: () => false };
+    step(g, 0.25);
+    assert(p.angle > 0.8 && p.angle < 1.3, 'angle after 0.25 s right = ' + p.angle);
+    assert(Math.hypot(p.vx, p.vy) < 1, 'turning must not thrust');
+    p.angle = 0; p.control.turn = 0; p.control.throttle = 1; step(g, 0.5);
+    assert(p.vx > 200 && Math.abs(p.vy) < 1, 'thrust along nose, v=' + p.vx + ',' + p.vy);
+    const before = p.vx; p.control.throttle = -1; step(g, 0.5);
+    assert(p.vx < before * 0.4, 'brake too weak: ' + before + ' -> ' + p.vx);
+    step(g, 3);
+    assert(p.vx < 0 && p.vx > -120, 'reverse should be slow, vx=' + p.vx);
+});
+test('a plate takes SHARDS_PER_PLATE Scrapper deliveries', () => {
+    const g = newGame(); g.startGame();
+    const n = G.Grimalkin.SHARDS_PER_PLATE; assert(n >= 3);
+    for (let k = 0; k < n - 1; k++) g.boss.deliverShard();
+    eq(g.boss.built, 0);
+    g.boss.deliverShard(); eq(g.boss.built, 1);
+});
+
+console.log('\nDifficulty, chatter and space mice');
+test('difficulty sets the bombs needed: easy 7, medium 10, hard 13, ridiculous 13', () => {
+    const want = { easy: 7, medium: 10, hard: 13, ridiculous: 13 };
+    for (const name in want) {
+        const g = newGame(); g.startGame(); g.setDifficulty(name);
+        for (let i = 0; i < 12; i++) g.boss.addPiece();
+        const boss = g.boss; eq(boss.hp, want[name], name + ' hp');
+        for (let i = 1; i < want[name]; i++) eq(boss.takeBombHit(), 'hit', name + ' hit ' + i);
+        eq(boss.takeBombHit(), 'killed', name + ' final hit');
+    }
+    eq(new G.EngineBridge({ headless: true, engineFactory: stubEngine }).difficulty, 'medium', 'default');
+});
+test('easier settings make the boss slower and slower to attack', () => {
+    const D = G.EngineBridge.DIFFICULTIES, o = G.EngineBridge.DIFFICULTY_ORDER;
+    for (let i = 1; i < o.length; i++) {
+        const a = D[o[i - 1]], b = D[o[i]];
+        assert(a.speed < b.speed && a.lungeEvery > b.lungeEvery && a.wakeGrace > b.wakeGrace && a.hits <= b.hits, o[i - 1] + ' vs ' + o[i]);
+    }
+    const reach = (name) => {
+        const g = newGame(7); g.startGame(); g.setDifficulty(name); removeThreats(g); g.flushPending();
+        g.player.invuln = 1e9; g.boss.x = g.player.x + 900; g.boss.y = g.player.y;
+        for (let i = 0; i < 12; i++) g.boss.addPiece();
+        let t = 0; while (G.GMath.dist(g.boss, g.player, g.worldSize) > 200 && t < 60) { step(g, 0.1); t += 0.1; }
+        return t;
+    };
+    const e = reach('easy'), h = reach('hard');
+    assert(e > h + 2, 'easy should take clearly longer to reach the pilot: easy ' + e.toFixed(1) + 's, hard ' + h.toFixed(1) + 's');
+});
+test('the awake boss talks at least every ~4 s', () => {
+    const g = newGame(); g.startGame(); removeThreats(g); g.flushPending(); g.player.invuln = 1e9;
+    let n = 0; const tt = g.audio.triggerTaunt; g.audio.triggerTaunt = function (k, d) { n++; return tt && tt.call(this, k, d); };
+    for (let i = 0; i < 12; i++) g.boss.addPiece();
+    n = 0; step(g, 40);
+    assert(n >= 10, 'only ' + n + ' taunts in 40 s');
+});
+test('space mice: rare spawns (< 20% per tick), rescue gives a bomb, the cat chases them', () => {
+    assert(G.EngineBridge.MOUSE_CHANCE > 0 && G.EngineBridge.MOUSE_CHANCE < 0.2);
+    const g = newGame(); g.startGame(); removeThreats(g); g.flushPending(); g.player.invuln = 1e9;
+    const m = g.spawn(new G.SpaceMouse(g, g.player.x + 5, g.player.y)); g.flushPending();
+    const b0 = g.playerBombs, s0 = g.score; step(g, 0.1);
+    assert(!m.alive && g.playerBombs === b0 + 1 && g.score === s0 + 500 && g.miceRescued === 1, 'rescue failed');
+    g.boss.x = g.player.x + 1500; g.boss.y = g.player.y;
+    for (let i = 0; i < 12; i++) g.boss.addPiece();
+    g.boss.grace = 0;
+    const m2 = g.spawn(new G.SpaceMouse(g, g.boss.x + 400, g.boss.y)); g.flushPending();
+    step(g, 0.5);
+    eq(g.boss.prey, m2, 'boss should be distracted by the mouse');
+    assert(m2.panic, 'mouse should flee the boss');
+    const g2 = newGame(5); g2.startGame(); let seen = 0;
+    for (let i = 0; i < 600; i++) { step(g2, 1); seen = Math.max(seen, g2.byType.mouse.length); g2.player && (g2.player.invuln = 1e9); }
+    assert(seen >= 1 && seen <= G.EngineBridge.MOUSE_MAX, 'mice seen over 10 min: ' + seen);
 });
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed\n');

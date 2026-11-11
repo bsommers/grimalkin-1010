@@ -1336,6 +1336,10 @@ AudioSynthMatrix.SFX = {
     A._tone(o, 'square', 1319 * p, 1319 * p, t + 0.055, 0.07, 0.19, 0.002);
     A._tone(o, 'square', 1976 * p, 1976 * p, t + 0.11, 0.12, 0.17, 0.002);
   },
+  mouseSqueak: function (A, o, t, p) {
+    A._tone(o, 'sine', 2900 * p, 4300 * p, t, 0.06, 0.16, 0.003);
+    A._tone(o, 'sine', 3300 * p, 4700 * p, t + 0.09, 0.07, 0.14, 0.003);
+  },
   bombLaunch: function (A, o, t, p) {
     A._tone(o, 'sawtooth', 130 * p, 740 * p, t, 0.34, 0.3, 0.008, 0.6);
     A._tone(o, 'square', 65 * p, 370 * p, t, 0.34, 0.2, 0.008, 0.6);

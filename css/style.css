@@ -114,7 +114,13 @@ h2 { margin: 0; font-size: clamp(30px, 6vw, 72px); letter-spacing: 0.24em; color
 .final b { color: var(--amber); font-size: 28px; margin-left: 10px; }
 .blink { animation: alarm 1s steps(2) infinite; }
 
-#startBtn { margin-top: 22px; padding: 12px 26px; font-size: 14px; color: var(--amber); animation: pulse 0.9s ease-in-out infinite alternate; }
+.diffs { margin-top: 18px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.diffs button.on { background: var(--ui); color: #000; }
+.diffs button[data-diff="ridiculous"] { color: var(--red); }
+.diffs button[data-diff="ridiculous"].on, .diffs button[data-diff="ridiculous"]:hover { background: var(--red); color: #000; }
+.tag.small { margin-top: 8px; font-size: 11px; opacity: 0.7; min-height: 1.2em; }
+
+#startBtn { margin-top: 16px; padding: 12px 26px; font-size: 14px; color: var(--amber); animation: pulse 0.9s ease-in-out infinite alternate; }
 #startBtn:hover { background: var(--amber); color: #000; }
 
 .keys { margin-top: 22px; display: grid; gap: 6px; font-size: 11px; text-align: left; opacity: 0.85; }

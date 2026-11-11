@@ -3,7 +3,10 @@
  * A colossal biomechanical cat-skull warship assembled plate by plate (12 plates)
  * by Scrappers. When the 12th plate locks in it wakes, the game enters
  * STATE_AWAKE, and it hunts the pilot — taunting by proximity — until it has
- * taken exactly Grimalkin.HITS_TO_KILL (13) Nipbomb hits.
+ * taken exactly `hitsToKill` Nipbomb hits: Grimalkin.HITS_TO_KILL (13) on HARD,
+ * fewer on the easier settings (see EngineBridge.DIFFICULTIES). Speed, lunge
+ * cadence, wake-up grace and build pace all come from the same tuning table.
+ * It is a cat: a space mouse nearby will distract it from the pilot.
  */
 
 class Grimalkin extends Entity {
@@ -12,8 +15,9 @@ class Grimalkin extends Entity {
         this.radius = 120;
         this.pieces = new Array(12).fill(false);
         this.built = 0;
+        this.shardsBanked = 0;        // delivered shards counting towards the next plate
         this.awake = false;
-        this.hp = Grimalkin.HITS_TO_KILL;
+        this.hp = this.hitsToKill;
         this.bombHits = 0;            // discrete bomb hits taken while awake
         this.hitFlash = 0;
         this.mouthOpen = 0;
@@ -23,12 +27,20 @@ class Grimalkin extends Entity {
         this.dead = false;
 
         this.tauntTimer = 3;
+        this.mutterTimer = 10;        // talks in its sleep while being built
+        this.grace = 0;               // seconds of groggy slow-motion after waking
+        this.prey = null;             // a space mouse it is chasing instead of the pilot
+        this.preyTime = 0;
+        this.preyCooldown = 0;
         this.lungeTimer = 5;
         this.lunging = 0;
         this.nearToggle = false;
         this.deathFxTimer = 0;
         this.driftAngle = (game.rand ? game.rand() : Math.random()) * GMath.TAU;
     }
+
+    get tuning() { return this.game.tuning || Grimalkin.DEFAULT_TUNING; }
+    get hitsToKill() { return this.tuning.hits || Grimalkin.HITS_TO_KILL; }
 
     /** Hunting is gated on the GLOBAL state, not just the boss's own flag. */
     get hunting() {
@@ -37,7 +49,15 @@ class Grimalkin extends Entity {
 
     /* ------------------------------------------------------------ assembly */
 
-    /** A Scrapper delivers a shard: lock in the next plate. Returns true if used. */
+    /** A Scrapper delivers a shard. Every SHARDS_PER_PLATE of them forge one plate. */
+    deliverShard() {
+        if (this.awake || this.dying) return false;
+        if (++this.shardsBanked < (this.tuning.shardsPerPlate || Grimalkin.SHARDS_PER_PLATE)) return true;
+        this.shardsBanked = 0;
+        return this.addPiece();
+    }
+
+    /** Lock in the next plate. Returns true if used. */
     addPiece() {
         if (this.awake || this.dying) return false;
         for (let i = 0; i < Grimalkin.ASSEMBLY_ORDER.length; i++) {
@@ -56,10 +76,12 @@ class Grimalkin extends Entity {
     wake() {
         if (this.awake) return;
         this.awake = true;
-        this.hp = Grimalkin.HITS_TO_KILL;
+        const T = this.tuning;
+        this.hp = this.hitsToKill;
         this.bombHits = 0;
         this.tauntTimer = 3.2;
-        this.lungeTimer = 4;
+        this.grace = T.wakeGrace;
+        this.lungeTimer = T.wakeGrace + 4 * T.lungeEvery;
         this.game.onBossAwake(this);
     }
 
@@ -68,7 +90,7 @@ class Grimalkin extends Entity {
     /**
      * One discrete Nipbomb hit.
      * Asleep: knocks the most recent plate off (sets the build back).
-     * Awake: counts towards the 13 hits needed to destroy it.
+     * Awake: counts towards the `hitsToKill` hits needed to destroy it.
      * Returns 'ignored' | 'setback' | 'hit' | 'killed'.
      */
     takeBombHit() {
@@ -89,7 +111,7 @@ class Grimalkin extends Entity {
         }
 
         this.bombHits++;
-        this.hp = Math.max(0, Grimalkin.HITS_TO_KILL - this.bombHits);
+        this.hp = Math.max(0, this.hitsToKill - this.bombHits);
 
         // Every second hit shears off an outer armour plate (cosmetic damage state).
         if (this.bombHits % 2 === 0) {
@@ -101,7 +123,7 @@ class Grimalkin extends Entity {
             }
         }
 
-        if (this.bombHits >= Grimalkin.HITS_TO_KILL) {
+        if (this.bombHits >= this.hitsToKill) {
             this.dying = 0.0001;
             this.game.onBossDying(this);
             return 'killed';
@@ -152,6 +174,30 @@ class Grimalkin extends Entity {
         const sp = 14;
         this.vx += (Math.cos(this.driftAngle) * sp - this.vx) * Math.min(1, dt);
         this.vy += (Math.sin(this.driftAngle) * sp - this.vy) * Math.min(1, dt);
+
+        // Half-built, it already mutters to anyone in earshot.
+        const game = this.game;
+        if (this.built >= 3 && !this.awake && game.gameState === 'STATE_MINING') {
+            this.mutterTimer -= dt;
+            if (this.mutterTimer <= 0 && !game.audio.isSpeaking()) {
+                this.mutterTimer = 8 + game.rand() * 7;
+                game.audio.triggerTaunt(this.built >= 9 ? 'NAME' : 'HUNGER', game.distToPlayer(this));
+            }
+        }
+    }
+
+    /** Nearest space mouse within pouncing interest, or null. */
+    findPrey(worldSize) {
+        const mice = this.game.byType.mouse;
+        if (!mice || this.preyCooldown > 0) return null;
+        let best = null, bd = Grimalkin.PREY_RANGE;
+        for (let i = 0; i < mice.length; i++) {
+            const m = mice[i];
+            if (!m.alive) continue;
+            const d = GMath.dist(this, m, worldSize);
+            if (d < bd) { bd = d; best = m; }
+        }
+        return best;
     }
 
     /**
@@ -161,9 +207,38 @@ class Grimalkin extends Entity {
      */
     hunt(dt, player, worldSize) {
         const game = this.game;
-        const wave = game.wave || 1;
-        const cruise = Math.min(470, 330 + wave * 22);
-        const lungeSpeed = Math.min(760, 620 + wave * 20);
+        const wave = game.wave || 1, T = this.tuning;
+        // Groggy for a few seconds after waking: it stretches before it hunts.
+        if (this.grace > 0) this.grace -= dt;
+        const groggy = this.grace > 0 ? 0.3 : 1;
+        const cruise = Math.min(470, 330 + wave * 22) * T.speed * groggy;
+        const lungeSpeed = Math.min(760, 620 + wave * 20) * T.lungeSpeed;
+
+        // A cat is a cat: a space mouse nearby beats the pilot for attention.
+        if (this.preyCooldown > 0) this.preyCooldown -= dt;
+        if (this.prey && (!this.prey.alive || this.preyTime > 5)) {
+            if (this.prey.alive) this.preyCooldown = 6;      // gave up, sulks for a bit
+            this.prey = null;
+        }
+        if (!this.prey) {
+            this.prey = this.findPrey(worldSize);
+            if (this.prey) {
+                this.preyTime = 0;
+                if (!game.audio.isSpeaking()) game.audio.triggerTaunt('RUN', game.distToPlayer(this));
+                this.tauntTimer = Math.max(this.tauntTimer, 2);
+            }
+        }
+        if (this.prey) {
+            this.preyTime += dt;
+            this.lunging = 0;
+            const d = this.steerTo(this.prey.x, this.prey.y, cruise * 1.1, 520, dt);
+            if (d < this.radius * 0.6) {
+                game.onMouseEaten(this.prey, this);
+                this.prey = null; this.preyCooldown = 3;
+            }
+            this.lungeTimer = Math.max(this.lungeTimer, 1.5);
+            return;
+        }
 
         let tx, ty, dist = Infinity;
         if (player) {
@@ -183,14 +258,14 @@ class Grimalkin extends Entity {
         this.lungeTimer -= dt;
         if (this.lunging > 0) {
             this.lunging -= dt;
-        } else if (player && this.lungeTimer <= 0 && dist < 950) {
+        } else if (player && this.lungeTimer <= 0 && dist < 820) {
             this.lunging = 1.1;
-            this.lungeTimer = Math.max(3.2, 6.5 - wave * 0.4) + game.rand() * 1.5;
+            this.lungeTimer = (Math.max(3.2, 6.5 - wave * 0.4) + game.rand() * 1.5) * T.lungeEvery;
             game.audio.triggerTaunt('ROAR', dist);
         }
 
         const speed = this.lunging > 0 ? lungeSpeed : (player ? cruise : cruise * 0.4);
-        const accel = this.lunging > 0 ? 1500 : 520;
+        const accel = this.lunging > 0 ? 1500 * T.lungeSpeed : 440 * T.speed;
         this.steerTo(tx, ty, speed, accel, dt);
 
         // Proximity-based taunts: the closer it is, the more personal it gets.
@@ -201,7 +276,7 @@ class Grimalkin extends Entity {
             else if (dist > 520) key = 'RUN';
             else { key = this.nearToggle ? 'ROAR' : 'NAME'; this.nearToggle = !this.nearToggle; }
             game.audio.triggerTaunt(key, dist);
-            this.tauntTimer = 4.2 + game.rand() * 3.2;
+            this.tauntTimer = 1.8 + game.rand() * 2.2;       // chatty
         }
     }
 
@@ -231,7 +306,11 @@ class Grimalkin extends Entity {
     }
 }
 
-Grimalkin.HITS_TO_KILL = 13;
+Grimalkin.HITS_TO_KILL = 13;      // HARD / RIDICULOUS; easier settings lower it via tuning.hits
+Grimalkin.PREY_RANGE = 650;       // how close a space mouse must be to distract it
+/* Used when the bridge supplies no tuning (bare unit tests): the original HARD numbers. */
+Grimalkin.DEFAULT_TUNING = { hits: 13, speed: 1, lungeSpeed: 1, lungeEvery: 1, wakeGrace: 0, shardsPerPlate: 3 };
+Grimalkin.SHARDS_PER_PLATE = 3;   // Scrapper deliveries needed per armour plate (build pace)
 Grimalkin.DEATH_TIME = 2.6;
 
 /* Plate geometry, unit coordinates (x right, y down), shared by both renderers. */

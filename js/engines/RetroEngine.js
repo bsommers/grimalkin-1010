@@ -401,6 +401,7 @@ class RetroEngine {
         case 'shot': this._drawShot(e, sx, sy, S); break;
         case 'crystal': this._drawCrystal(e, sx, sy, S, time); break;
         case 'worker': this._drawWorker(e, sx, sy, S, time); break;
+        case 'mouse': this._drawMouse(e, sx, sy, S, time); break;
         case 'warrior': this._drawWarrior(e, sx, sy, S, time); break;
         case 'beam': this._drawBeam(e, sx, sy, S); break;
         case 'bomb': this._drawBomb(e, sx, sy, S, time); break;
@@ -774,6 +775,75 @@ class RetroEngine {
     const tw = 0.5 + 0.5 * Math.sin(time * 7 + seed * 9);
     this.drawVectorAsset(M.SHARD, sx, sy, sc, seed + time * 1.4, P.amber, 0.7 + 0.3 * tw, 1.4);
     if (tw > 0.72) this.drawVectorAsset(M.TWINKLE, sx, sy, sc * (1.2 + tw), 0, P.eye, (tw - 0.72) * 3, 0);
+  }
+
+  // Space mouse, seen from above: pink teardrop, white ears + nose, wiggling tail, bubble helmet.
+  _drawMouse(e, sx, sy, S, time) {
+    const ctx = this.ctx, P = this.colorPalette, M = RetroEngine.MODELS;
+    const ang = e.angle === e.angle && typeof e.angle === 'number' ? e.angle : 0;
+    const panic = !!e.panic;
+    let ph = typeof e.scurry === 'number' && e.scurry === e.scurry ? e.scurry : (time || 0) * 6;
+    let sq = e.squeak > 0 ? (e.squeak > 1 ? 1 : e.squeak) : 0;
+    let sc = (e.radius || 11) * S;
+    if (!(sc >= 4.5)) sc = 4.5;
+    const c = Math.cos(ang) * sc, s = Math.sin(ang) * sc;
+
+    // tail + feet (one dynamic path; unit = radius, nose along +x)
+    const amp = panic ? 0.4 : 0.22;
+    const tph = panic ? ph * 1.5 + (time || 0) * 16 : ph;
+    ctx.beginPath();
+    ctx.moveTo(sx - 0.75 * c, sy - 0.75 * s);
+    for (let i = 1; i <= 6; i++) {
+      const t = i / 6;
+      const x = -0.75 - t * 0.8, y = amp * t * Math.sin(tph - t * 5.2);
+      ctx.lineTo(sx + x * c - y * s, sy + x * s + y * c);
+    }
+    const sw = 0.2 * Math.sin(ph * 2);                  // hind feet paddle alternately
+    for (let side = -1; side <= 1; side += 2) {
+      const k = sw * side;
+      ctx.moveTo(sx - 0.45 * c - 0.55 * side * s, sy - 0.45 * s + 0.55 * side * c);
+      ctx.lineTo(sx + (k - 0.5) * c - 0.84 * side * s, sy + (k - 0.5) * s + 0.84 * side * c);
+    }
+    ctx.strokeStyle = P.pink;
+    ctx.lineWidth = 3;
+    ctx.globalAlpha = panic ? 0.5 : 0.36;
+    ctx.stroke();
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = 1;
+    ctx.stroke();
+
+    this.drawVectorAsset(M.MOUSE_HELMET, sx, sy, sc, ang, P.cyan, 0.3 + 0.25 * sq, 0);
+    this.drawVectorAsset(M.MOUSE, sx, sy, sc, ang, P.pink, 1, panic ? 2.6 : 1.7);
+    if (panic || sq > 0) this.drawVectorAsset(M.MOUSE, sx, sy, sc, ang, P.white, panic ? 0.3 + 0.3 * sq : 0.3 * sq, 0);
+    this.drawVectorAsset(M.MOUSE_EARS, sx, sy, sc, ang, P.white, 0.95, panic ? 1.4 : 0.8);
+    this.drawVectorAsset(M.MOUSE_WHISKERS, sx, sy, sc, ang, P.white, 0.6, 0);
+
+    // nose dot
+    const nx = sx + c, ny = sy + s;
+    this.drawVectorAsset(M.DIAMOND, nx, ny, sc * 0.11 > 1 ? sc * 0.11 : 1, ang, P.white, 1, 1.5);
+
+    // squeak marks: two short arcs expanding ahead of the nose as squeak decays
+    if (sq > 0.02) {
+      const C = RetroEngine.CIRCLE;
+      const base = (Math.round(ang / (Math.PI * 2) * 64) % 64 + 64) % 64;
+      ctx.beginPath();
+      for (let a = 0; a < 2; a++) {
+        const rad = sc * (0.4 + (1 - sq) * 0.9 + a * 0.42);
+        const half = 4 + a;                              // +-22 / +-28 degrees
+        for (let i = -half; i <= half; i++) {
+          const j = ((base + i) % 64 + 64) % 64;
+          const px = nx + C[j * 2] * rad, py = ny + C[j * 2 + 1] * rad;
+          if (i === -half) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+      }
+      ctx.strokeStyle = P.white;
+      ctx.lineWidth = 3;
+      ctx.globalAlpha = 0.3 * sq;
+      ctx.stroke();
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = sq;
+      ctx.stroke();
+    }
   }
 
   _drawShot(e, sx, sy, S) {
@@ -1387,6 +1457,28 @@ RetroEngine.MODELS = (function () {
     SHARD: model(
       true, [0, -1.3, 0.65, 0, 0, 1.3, -0.65, 0],
       false, [0, -1.3, 0, 1.3]
+    ),
+    // space mouse from above: teardrop body, round ears, whisker ticks, helmet arc
+    MOUSE: model(
+      true, [1.0, 0, 0.62, 0.27, 0.2, 0.5, -0.25, 0.6, -0.6, 0.47, -0.78, 0.2,
+        -0.78, -0.2, -0.6, -0.47, -0.25, -0.6, 0.2, -0.5, 0.62, -0.27]
+    ),
+    MOUSE_EARS: model(
+      true, orb.map(function (v, i) { return i & 1 ? v * 0.3 - 0.62 : v * 0.3 + 0.2; }),
+      true, orb.map(function (v, i) { return i & 1 ? v * 0.3 + 0.62 : v * 0.3 + 0.2; })
+    ),
+    MOUSE_WHISKERS: model(
+      false, [0.8, 0.16, 1.02, 0.46],
+      false, [0.72, 0.21, 0.8, 0.56],
+      false, [0.8, -0.16, 1.02, -0.46],
+      false, [0.72, -0.21, 0.8, -0.56]
+    ),
+    MOUSE_HELMET: model(
+      false, (function () {
+        const a = [];
+        for (let i = -6; i <= 6; i++) a.push(0.3 + Math.cos(i / 6 * 2.05) * 1.02, Math.sin(i / 6 * 2.05) * 1.02);
+        return a;
+      })()
     ),
     DIAMOND: model(
       true, [0, -1, 1, 0, 0, 1, -1, 0]

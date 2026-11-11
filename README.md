@@ -46,18 +46,46 @@ python3 -m http.server 8765    # then http://127.0.0.1:8765/
 
 | Key | Action |
 |---|---|
-| WASD / arrows | Thrust (49-way: tap for a nudge, hold for full burn) |
+| ← → / A D | Rotate left / right |
+| ↑ / W | Thrust along the nose |
+| ↓ / S | Brake, then slow reverse thrusters |
 | Space / J | Fire bolts + short-range mining beam |
 | B / K / Shift | Launch a Nipbomb (homes on Grimalkin) |
 | M / Tab | Switch Retro ⇄ Neo |
 | P / Esc, N | Pause, mute |
 | Enter | Start |
 
-Gamepad and touch are supported. Tips: bolts cut shards out of rocks; fly over shards
+| Controller (standard mapping) | Action |
+|---|---|
+| Left stick / d-pad | Fly: the ship turns and thrusts where you push |
+| Right stick | Aim the nose independently and fire |
+| A / right trigger | Fire bolts + mining beam |
+| B / X / right bumper / left trigger | Launch a Nipbomb |
+| Y | Switch Retro ⇄ Neo |
+| Start, Back | Start / pause / resume, mute |
+
+## Difficulty
+
+Pick on the title screen with **1–4**, **← →**, the stick / d-pad, or the buttons. The choice is remembered.
+
+| Level | Bombs to kill | Grimalkin | Build pace |
+|---|---|---|---|
+| Easy | 7 | Slow, lunges rarely, groggy for 6 s after waking | 4 deliveries per plate, fewer drones |
+| Medium (default) | 10 | A bit slower and lazier than Hard, 4.5 s wake-up | 3 per plate |
+| Hard | 13 | The original tuning, 3 s wake-up | 3 per plate |
+| Ridiculous | 13 | Faster than your ship, lunges constantly | 2 per plate, extra drones |
+
+Grimalkin talks a lot: it mutters while half-built and taunts every few seconds once awake.
+
+**Space mice** turn up now and then (a 15% chance per spawn tick, at most three at once).
+Fly over one to rescue it for 500 points and a Nipbomb. Being a cat, an awake Grimalkin
+within range drops the hunt to chase the mouse instead — use that.
+
+Touch is supported too (left half stick, right half fire, two-finger tap bombs). Tips: bolts cut shards out of rocks; fly over shards
 to bank bombs (max 12). Shoot Scrappers carrying shards. Bombing the unfinished boss
 knocks plates back off. Once it is awake, keep moving — it lunges faster than you fly.
 
-Demo flags: `index.html?debug&mode=retro|neo&autostart&awake&bombs&god`
+Demo flags: `index.html?debug&mode=retro|neo&autostart&awake&bombs&god&mice&difficulty=easy|medium|hard|ridiculous`
 (with `debug`, keys 9 / 8 / 0 add a plate / land a bomb hit / fill bombs).
 
 ## Tests
@@ -68,7 +96,7 @@ node tests/run.js
 
 Headless suite over the real game scripts covering the three validation rules — mode
 switches preserve all gameplay state, hunting activates exactly in `STATE_AWAKE`, and
-exactly 13 discrete bomb hits destroy the boss — plus wrap, mining, drone AI and
+exactly 13 discrete bomb hits destroy the boss (on Hard; 7 / 10 on Easy / Medium) — plus difficulty, space mice, wrap, mining, drone AI and
 state-machine checks.
 
 ## Layout

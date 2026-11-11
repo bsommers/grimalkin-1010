@@ -91,6 +91,11 @@ Common: `type, rx, ry, vx, vy, angle, radius, age` (age in seconds).
 | `particle` | `color` `[r,g,b]` 0..1, `life` (remaining s), `maxLife`, `size` (world units), `kind` `'spark'`\|`'smoke'`\|`'debris'`\|`'ring'` | Fade by `life/maxLife`. `ring` = expanding shockwave ring of radius `size`. Sparks are light-emitting. |
 | `boss` | see below | radius 120. |
 
+### Space mouse (`type: 'mouse'`)
+
+`radius` 11, `angle` = heading (nose along it), `panic` (bool, fleeing), `scurry` (animation
+phase in radians, advances with distance run), `squeak` (1 → 0 flash). Harmless; drawn pink.
+
 ### Boss (`type: 'boss'`)
 
 ```js
@@ -159,14 +164,19 @@ input.update(dt)        // once per frame, before game logic
 input.endFrame()        // once per frame, after game logic (clears edge triggers)
 input.move              // {x, y} each quantised to 7 steps (-1, -2/3, -1/3, 0, 1/3, 2/3, 1) => 49-way
 input.moveRaw           // {x, y} smooth pre-quantisation floating thrust vector
+input.turn              // -1..1 keyboard rotation (left/right), ramped
+input.throttle          // -1..1 keyboard thrust: +1 forward (up), -1 brake then slow reverse (down)
+input.aim               // {x, y} right-stick aim direction; (0,0) when centred
 input.fire              // bool, held
-input.pressed(action)   // edge-triggered this frame: 'start' | 'bomb' | 'toggleMode' | 'pause' | 'mute'
+input.pressed(action)   // edge-triggered this frame: 'start' | 'bomb' | 'toggleMode' | 'pause' | 'mute' | 'menu'
 input.anyKey            // bool edge: any key/button/tap went down this frame
 ```
 
-Keys: WASD/arrows move (keyboard ramps the floating vector up/down over ~120 ms so
-taps give 1/3 thrust and holds give full thrust); Space/J fire; B/K/Shift bomb;
-Enter start; M or Tab toggle mode; P/Esc pause; N mute. Gamepad: left stick (true
-49-way quantise), A fire, B/X bomb, Start start, Y toggle mode. Touch: left half =
+Keys: left/right (A/D) rotate, up (W) thrusts along the nose, down (S) brakes then
+reverses slowly — these feed `turn`/`throttle`, never `move` (ramped over ~120 ms so
+taps are fine adjustments); Space/J fire; B/K/Shift bomb; Enter start; M or Tab toggle
+mode; P/Esc pause; N mute. Gamepad: left stick / d-pad fills `move` (true 49-way
+quantise, ship flies where pushed), right stick fills `aim` and fires, A/RT fire,
+B/X/RB/LT bomb, Y toggle mode, Start = 'menu' (start, pause, resume), Back mute. Touch: left half =
 floating virtual stick, right half = fire, two-finger tap = bomb.
 `preventDefault` on game keys so the page does not scroll.

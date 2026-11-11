@@ -5,8 +5,11 @@
  *
  *   input.update(dt)   once per frame, before game logic
  *   input.endFrame()   once per frame, after game logic (clears edge triggers)
- *   input.move         {x, y} each quantised to 7 steps => 49-way
+ *   input.move         {x, y} stick / touch direction, each quantised to 7 steps => 49-way
  *   input.moveRaw      {x, y} smooth pre-quantisation vector
+ *   input.turn         -1..1 keyboard rotation (left / right keys), ramped
+ *   input.throttle     -1..1 keyboard thrust (up = +1 forward, down = -1 brake / reverse)
+ *   input.aim          {x, y} right-stick aim direction (unit-ish, 0,0 when centred)
  *   input.fire         bool, held
  *   input.pressed(a)   edge: 'start' | 'bomb' | 'toggleMode' | 'pause' | 'mute'
  *   input.anyKey       bool edge: any key / button / tap went down this frame
@@ -17,6 +20,9 @@ class InputManager {
   constructor(targetElement) {
     this.move = { x: 0, y: 0 };
     this.moveRaw = { x: 0, y: 0 };
+    this.turn = 0;
+    this.throttle = 0;
+    this.aim = { x: 0, y: 0 };
     this.fire = false;
     this.anyKey = false;
 
@@ -27,7 +33,7 @@ class InputManager {
     this._anyLatch = false;
     this._kb = { x: 0, y: 0 };  // ramped keyboard vector
     this._kick = { x: 0, y: 0 };// pending tap impulses
-    this._pad = { x: 0, y: 0, fire: false };
+    this._pad = { x: 0, y: 0, ax: 0, ay: 0, fire: false };
     this._padPrev = {};         // pad index -> array of previous button states
     this._touch = {
       stickId: null, ox: 0, oy: 0, x: 0, y: 0,
@@ -65,8 +71,13 @@ class InputManager {
       this._pollPads();
 
       // --- combine ---------------------------------------------------------
-      let x = this._kb.x + this._pad.x + this._touch.x;
-      let y = this._kb.y + this._pad.y + this._touch.y;
+      // Keyboard flies the ship tank-style; sticks and touch point where to go.
+      this.turn = this._kb.x;
+      this.throttle = -this._kb.y;
+      this.aim.x = this._pad.ax;
+      this.aim.y = this._pad.ay;
+      let x = this._pad.x + this._touch.x;
+      let y = this._pad.y + this._touch.y;
       x = x < -1 ? -1 : x > 1 ? 1 : x;
       y = y < -1 ? -1 : y > 1 ? 1 : y;
       this.moveRaw.x = x;
@@ -122,6 +133,7 @@ class InputManager {
     this._held = {};
     this._down = {};
     this._kick.x = 0; this._kick.y = 0;
+    this._kb.x = 0; this._kb.y = 0;
     const t = this._touch;
     t.stickId = null; t.x = 0; t.y = 0; t.fireIds = {}; t.active = {}; t.count = 0;
   }
@@ -222,7 +234,7 @@ class InputManager {
 
   _pollPads() {
     const pad = this._pad;
-    pad.x = 0; pad.y = 0; pad.fire = false;
+    pad.x = 0; pad.y = 0; pad.ax = 0; pad.ay = 0; pad.fire = false;
     if (typeof navigator === 'undefined' || !navigator || typeof navigator.getGamepads !== 'function') return;
     let pads = null;
     try { pads = navigator.getGamepads(); } catch (e) { return; }
@@ -247,7 +259,14 @@ class InputManager {
         }
         prev[n] = d;
       }
-      if (isDown(0)) pad.fire = true;
+      if (isDown(0) || isDown(7)) pad.fire = true;      // A or right trigger
+
+      // right stick: aim the nose (and fire) independently of where you fly
+      let rx = Number((gp.axes || [])[2]) || 0, ry = Number((gp.axes || [])[3]) || 0;
+      const rm = Math.sqrt(rx * rx + ry * ry);
+      if (rm > 0.35 && rm >= Math.sqrt(pad.ax * pad.ax + pad.ay * pad.ay)) {
+        pad.ax = rx / rm; pad.ay = ry / rm; pad.fire = true;
+      }
 
       // left stick: radial deadzone, circle -> square so diagonals reach (1,1)
       const ax = gp.axes || [];
@@ -385,10 +404,13 @@ InputManager.KEYMAP = {
 InputManager.PADMAP = {
   1: 'bomb',        // B
   2: 'bomb',        // X
+  5: 'bomb',        // right bumper
+  6: 'bomb',        // left trigger
   3: 'toggleMode',  // Y
-  9: 'start'        // Start
+  8: 'mute',        // Back / Select
+  9: 'menu'         // Start: start, pause, resume
 };
 
-InputManager.EDGE_ACTIONS = { start: true, bomb: true, toggleMode: true, pause: true, mute: true };
+InputManager.EDGE_ACTIONS = { start: true, bomb: true, toggleMode: true, pause: true, mute: true, menu: true };
 
 if (typeof module !== 'undefined') module.exports = { InputManager };
