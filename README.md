@@ -88,6 +88,28 @@ knocks plates back off. Once it is awake, keep moving — it lunges faster than 
 Demo flags: `index.html?debug&mode=retro|neo&autostart&awake&bombs&god&mice&difficulty=easy|medium|hard|ridiculous`
 (with `debug`, keys 9 / 8 / 0 add a plate / land a bomb hit / fill bombs).
 
+## Desktop app
+
+The game also ships as a standalone app built with [Tauri](https://tauri.app): a small
+native shell (`src-tauri/`) that shows the same `index.html` in the operating system's own
+web view, so the download is about 10 MB instead of the 100 MB+ of a bundled browser.
+There is one build per platform — no single binary runs on all three.
+
+```sh
+npm install                              # Tauri CLI only; the game itself has no dependencies
+scripts/build-desktop.sh mac             # universal .dmg (arm64 + x86_64)
+scripts/build-desktop.sh linux-arm64     # .deb, .rpm, .AppImage in Docker
+scripts/build-desktop.sh linux-x64       # .deb, .rpm (AppImage only when built on an x64 host)
+scripts/build-desktop.sh windows         # arm64 + x64 installer and portable .exe, in a win-devvm VM
+npm run app:dev                          # run the app from source
+```
+
+Artifacts land in `release/`. Each build runs the app's self-test
+(`GRIMALKIN_SELFTEST=<file>` starts a game, switches renderers, writes a JSON report and
+exits) and saves the report beside the artifacts. The apps are unsigned: macOS asks you to
+right-click → Open the first time, Windows SmartScreen shows "More info → Run anyway".
+Windows needs the WebView2 runtime (part of Windows 11); Linux needs WebKitGTK 4.1.
+
 ## Tests
 
 ```sh
@@ -118,6 +140,8 @@ js/entities/Drones.js       Scrapper and Claw state machines
 js/entities/Grimalkin.js    the boss: 12-plate assembly, hunting, taunts, 13-hit kill
 docs/CONTRACT.md            interface contract between the bridge, renderers, audio and input
 assets/brand/               logo, banner, social card, favicons, web manifest
+src-tauri/                  desktop shell (Tauri): window, icons, self-test
+scripts/build-desktop.sh    builds the macOS, Linux and Windows apps into release/
 ```
 
 ## Brand assets
